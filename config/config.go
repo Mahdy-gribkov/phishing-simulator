@@ -13,6 +13,7 @@ type Config struct {
 	SMTPSenderUser     string // For AUTH
 	SMTPSenderPass     string // For AUTH
 	InsecureSkipVerify bool
+	DirectMode         bool // New: Bypass Relay, send direct to MX
 }
 
 func Load() *Config {
@@ -25,6 +26,7 @@ func Load() *Config {
 		SMTPSenderUser:     getEnv("SMTP_USER", ""),
 		SMTPSenderPass:     getEnv("SMTP_PASS", ""),
 		InsecureSkipVerify: getEnv("INSECURE_SKIP_VERIFY", "true") == "true",
+		DirectMode:         getEnv("DIRECT_MODE", "false") == "true",
 	}
 }
 

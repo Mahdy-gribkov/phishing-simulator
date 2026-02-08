@@ -2,10 +2,10 @@ package smtp
 
 import (
 	"crypto/tls"
-	"encoding/base64"
 	"fmt"
+	"log"
 	"net"
-	"net/textproto"
+	"net/smtp"
 	"strings"
 	"time"
 )
@@ -16,11 +16,12 @@ type Client struct {
 	Username           string
 	Password           string
 	SenderEmail        string
-	SenderName         string // New
+	SenderName         string
 	InsecureSkipVerify bool
+	DirectMode         bool
 }
 
-func NewClient(host, port, username, password, senderEmail, senderName string, insecureSkipVerify bool) *Client {
+func NewClient(host, port, username, password, senderEmail, senderName string, insecureSkipVerify, directMode bool) *Client {
 	return &Client{
 		Host:               host,
 		Port:               port,
@@ -29,125 +30,123 @@ func NewClient(host, port, username, password, senderEmail, senderName string, i
 		SenderEmail:        senderEmail,
 		SenderName:         senderName,
 		InsecureSkipVerify: insecureSkipVerify,
+		DirectMode:         directMode,
 	}
 }
 
-// Send implements the raw SMTP protocol to inject custom headers
 func (c *Client) Send(to, subject, body string) error {
-	address := fmt.Sprintf("%s:%s", c.Host, c.Port)
-	conn, err := net.Dial("tcp", address)
-	if err != nil {
-		return fmt.Errorf("failed to connect to SMTP server: %w", err)
-	}
-	defer conn.Close()
+	var targetHost, targetPort string
+	targetHost = c.Host
+	targetPort = c.Port
 
-	tp := textproto.NewConn(conn)
+	// --- DIRECT DELIVERY LOGIC ---
+	if c.DirectMode {
+		parts := strings.Split(to, "@")
+		if len(parts) != 2 {
+			return fmt.Errorf("invalid recipient email: %s", to)
+		}
+		domain := parts[1]
 
-	// 1. Read greeting
-	if _, _, err := tp.ReadResponse(220); err != nil {
-		return fmt.Errorf("greeting failed: %w", err)
-	}
-
-	// Helper to send command and check response
-	sendCommand := func(expectCode int, format string, args ...any) error {
-		id, err := tp.Cmd(format, args...)
+		mxs, err := net.LookupMX(domain)
 		if err != nil {
-			return err
+			return fmt.Errorf("MX lookup failed for %s: %v", domain, err)
 		}
-		tp.StartResponse(id)
-		defer tp.EndResponse(id)
-		if _, _, err := tp.ReadResponse(expectCode); err != nil {
-			return err
+		if len(mxs) == 0 {
+			return fmt.Errorf("no MX records found for %s", domain)
 		}
-		return nil
+		targetHost = mxs[0].Host
+		targetPort = "25"
+		log.Printf("[DirectMode] Targeting MX for %s: %s:%s", domain, targetHost, targetPort)
+	}
+	// -----------------------------
+
+	addr := fmt.Sprintf("%s:%s", targetHost, targetPort)
+
+	// 1. Connect
+	conn, err := net.DialTimeout("tcp", addr, 10*time.Second)
+	if err != nil {
+		return fmt.Errorf("failed to connect to SMTP server %s: %w", addr, err)
 	}
 
-	// 2. EHLO
-	if err := sendCommand(250, "EHLO localhost"); err != nil {
-		return fmt.Errorf("EHLO failed: %w", err)
+	// 2. Wrap via Standard Library Client
+	client, err := smtp.NewClient(conn, targetHost)
+	if err != nil {
+		conn.Close()
+		return fmt.Errorf("failed to create SMTP client: %w", err)
+	}
+	defer client.Quit()
+
+	// 3. Hello
+	if err = client.Hello("localhost"); err != nil {
+		return fmt.Errorf("HELO failed: %w", err)
 	}
 
-	// 3. STARTTLS
-	if id, err := tp.Cmd("STARTTLS"); err == nil {
-		tp.StartResponse(id)
-		code, _, err := tp.ReadResponse(220)
-		tp.EndResponse(id)
-
-		if err == nil && code == 220 {
-			// Handshake
-			tlsConfig := &tls.Config{
-				InsecureSkipVerify: c.InsecureSkipVerify,
-				ServerName:         c.Host,
-			}
-			tlsConn := tls.Client(conn, tlsConfig)
-			tp = textproto.NewConn(tlsConn)
-
-			// Re-EHLO
-			if err := sendCommand(250, "EHLO localhost"); err != nil {
-				return fmt.Errorf("post-TLS EHLO failed: %w", err)
-			}
+	// 4. STARTTLS
+	if ok, _ := client.Extension("STARTTLS"); ok {
+		config := &tls.Config{
+			InsecureSkipVerify: c.InsecureSkipVerify,
+			ServerName:         targetHost,
 		}
-	}
-
-	// 3.5 AUTH PLAIN (If configured)
-	if c.Username != "" && c.Password != "" {
-		identity := ""
-		auth := []byte(identity + "\x00" + c.Username + "\x00" + c.Password)
-		authStr := base64.StdEncoding.EncodeToString(auth)
-
-		if err := sendCommand(235, "AUTH PLAIN %s", authStr); err != nil {
-			return fmt.Errorf("AUTH PLAIN failed: %w", err)
+		if err = client.StartTLS(config); err != nil {
+			// In Direct Mode, failure might be acceptable, but usually we want to know
+			log.Printf("STARTTLS warning: %v", err)
 		}
 	}
 
-	// 4. MAIL FROM
-	if err := sendCommand(250, "MAIL FROM:<%s>", c.Username); err != nil {
+	// 5. Auth (Standard Library handles PLAIN/LOGIN/CRAM-MD5 automatically)
+	if !c.DirectMode && c.Username != "" && c.Password != "" {
+		auth := smtp.PlainAuth("", c.Username, c.Password, c.Host)
+		if err = client.Auth(auth); err != nil {
+			return fmt.Errorf("authentication failed: %w", err)
+		}
+	}
+
+	// 6. Mail Transaction
+	if err = client.Mail(c.SenderEmail); err != nil {
 		return fmt.Errorf("MAIL FROM failed: %w", err)
 	}
-
-	// 5. RCPT TO
-	if err := sendCommand(250, "RCPT TO:<%s>", to); err != nil {
+	if err = client.Rcpt(to); err != nil {
 		return fmt.Errorf("RCPT TO failed: %w", err)
 	}
 
-	// 6. DATA
-	if err := sendCommand(354, "DATA"); err != nil {
-		return fmt.Errorf("DATA failed: %w", err)
+	// 7. Data
+	w, err := client.Data()
+	if err != nil {
+		return fmt.Errorf("DATA command failed: %w", err)
 	}
+	// Do not defer w.Close() here - we need to check the error!
 
-	// 7. Inject Headers & Body
+	// Headers
+	// Note: We need a unique Message-ID to avoid "Header parsing error" or spam blocks
+	domain := "localhost"
+	if strings.Contains(c.SenderEmail, "@") {
+		domain = strings.Split(c.SenderEmail, "@")[1]
+	}
+	msgID := fmt.Sprintf("<%d.%s@%s>", time.Now().UnixNano(), "phishing-sim", domain)
+
 	headers := []string{
-		fmt.Sprintf("From: %s <%s>", c.SenderName, c.SenderEmail), // Dynamic Name & Email
+		fmt.Sprintf("From: %s <%s>", c.SenderName, c.SenderEmail),
 		fmt.Sprintf("To: %s", to),
 		fmt.Sprintf("Subject: %s", subject),
 		fmt.Sprintf("Date: %s", time.Now().Format(time.RFC1123Z)),
-		fmt.Sprintf("Message-ID: <%d@whitehouse.gov>", time.Now().UnixNano()),
+		fmt.Sprintf("Message-ID: %s", msgID),
 		"MIME-Version: 1.0",
 		"Content-Type: text/plain; charset=UTF-8",
 	}
 
-	msg := strings.Join(headers, "\r\n") + "\r\n\r\n" + body + "\r\n."
+	// SMTP requires standard Network Newlines (\r\n)
+	// We join headers with \r\n, and then add TWO \r\n before the body.
+	msg := strings.Join(headers, "\r\n") + "\r\n\r\n" + body
 
-	// Send message content
-	w := tp.Writer.W
-	if _, err := w.WriteString(msg); err != nil {
+	if _, err = w.Write([]byte(msg)); err != nil {
+		w.Close() // Close anyway to clean up
 		return fmt.Errorf("failed to write body: %w", err)
 	}
-	if _, err := w.WriteString("\r\n"); err != nil {
-		return fmt.Errorf("failed to write terminator: %w", err)
-	}
 
-	if err := w.Flush(); err != nil {
-		return fmt.Errorf("failed to flush body: %w", err)
+	// MUST explicitly close to send the "." and check the server's response code (250 OK)
+	if err = w.Close(); err != nil {
+		return fmt.Errorf("message rejected by server: %w", err)
 	}
-
-	// 8. Wait for DATA confirmation
-	if _, _, err := tp.ReadResponse(250); err != nil {
-		return fmt.Errorf("message data confirmation failed: %w", err)
-	}
-
-	// 9. QUIT
-	_ = sendCommand(221, "QUIT")
 
 	return nil
 }

@@ -84,6 +84,7 @@ func main() {
 			cfg.SMTPSenderEmail,
 			cfg.SMTPSenderName,
 			cfg.InsecureSkipVerify,
+			cfg.DirectMode,
 		)
 
 		err := client.Send(to, subject, body)
@@ -98,8 +99,8 @@ func main() {
 	})
 
 	log.Printf("Server listening on port %s", cfg.Port)
-	log.Printf("Configuration: SMTP Host=%s, Port=%s, Sender=%s <%s>",
-		cfg.SMTPHost, cfg.SMTPPort, cfg.SMTPSenderName, cfg.SMTPSenderEmail)
+	log.Printf("Configuration: SMTP Host=%s, Port=%s, Sender=%s <%s>, DirectMode=%v",
+		cfg.SMTPHost, cfg.SMTPPort, cfg.SMTPSenderName, cfg.SMTPSenderEmail, cfg.DirectMode)
 
 	if err := http.ListenAndServe(":"+cfg.Port, nil); err != nil {
 		log.Fatalf("Error starting server: %v", err)
