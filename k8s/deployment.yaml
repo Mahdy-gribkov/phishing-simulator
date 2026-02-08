@@ -1,0 +1,29 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: phishing-simulator
+  labels:
+    app: phishing-simulator
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: phishing-simulator
+  template:
+    metadata:
+      labels:
+        app: phishing-simulator
+    spec:
+      containers:
+      - name: app
+        image: phishing-simulator:latest
+        imagePullPolicy: Never # Use local image for testing
+        ports:
+        - containerPort: 8080
+        env:
+        - name: PORT
+          value: "8080"
+        - name: SMTP_HOST
+          value: "mailhog" # Assumes mailhog service in same namespace
+        - name: SMTP_PORT
+          value: "1025"

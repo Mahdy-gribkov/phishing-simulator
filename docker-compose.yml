@@ -1,0 +1,20 @@
+services:
+  app:
+    build: .
+    ports:
+      - "8080:8080"
+    environment:
+    environment:
+      - PORT=${PORT}
+      - SMTP_HOST=${SMTP_HOST}
+      - SMTP_PORT=${SMTP_PORT}
+      - SMTP_USER=${SMTP_USER}
+      - SMTP_PASS=${SMTP_PASS}
+      - SMTP_SENDER_EMAIL=${SMTP_SENDER_EMAIL}
+      - INSECURE_SKIP_VERIFY=${INSECURE_SKIP_VERIFY}
+
+  # mailhog:
+  #   image: mailhog/mailhog
+  #   ports:
+  #     - "1025:1025" 
+  #     - "8025:8025" 

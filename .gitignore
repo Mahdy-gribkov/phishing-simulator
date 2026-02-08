@@ -1,0 +1,20 @@
+# Secrets
+.env
+.env.local
+
+# Binaries
+phishing-simulator
+*.exe
+*.dll
+
+# IDEs
+.vscode/
+.idea/
+.vs/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# Artifacts
+tmp/

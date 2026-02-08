@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Phishing Simulator - Educational Tool</title>
+    <style>
+        body { font-family: sans-serif; max-width: 600px; margin: 40px auto; padding: 20px; background-color: #f4f4f9; color: #333; }
+        h1 { color: #d32f2f; text-align: center; }
+        .warning { background-color: #ffebee; border: 1px solid #ffcdd2; color: #b71c1c; padding: 15px; border-radius: 4px; margin-bottom: 20px; font-size: 0.9em; }
+        form { background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        .form-group { margin-bottom: 15px; }
+        label { display: block; margin-bottom: 5px; font-weight: bold; }
+        input[type="email"], input[type="text"], textarea { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
+        textarea { height: 150px; }
+        button { background-color: #d32f2f; color: white; border: none; padding: 12px 20px; border-radius: 4px; cursor: pointer; width: 100%; font-size: 1.1em; }
+        button:hover { background-color: #b71c1c; }
+        .success { background-color: #e8f5e9; color: #2e7d32; padding: 15px; border-radius: 4px; margin-bottom: 20px; border: 1px solid #c8e6c9; }
+        .error { background-color: #ffebee; color: #c62828; padding: 15px; border-radius: 4px; margin-bottom: 20px; border: 1px solid #ffcdd2; }
+    </style>
+</head>
+<body>
+
+    <h1>🎣 Phishing Simulator</h1>
+
+    <div class="warning">
+        <strong>EDUCATIONAL USE ONLY.</strong><br>
+        This tool demonstrates how email spoofing works by manually checking SMTP headers.<br>
+        Emails sent from here <em>will</em> be blocked by modern security filters (SPF/DKIM/DMARC).
+    </div>
+
+    {{if .Success}}
+        <div class="success">✅ {{.Success}}</div>
+    {{end}}
+    {{if .Error}}
+        <div class="error">❌ {{.Error}}</div>
+    {{end}}
+
+    <form method="POST" action="/send">
+        <div class="form-group">
+            <label for="to">Recipient Email</label>
+            <input type="email" id="to" name="to" required placeholder="victim@example.com">
+        </div>
+
+        <div class="form-group">
+            <label for="subject">Subject</label>
+            <input type="text" id="subject" name="subject" required placeholder="Urgent: Update your password">
+        </div>
+
+        <div class="form-group">
+            <label for="body">Message Body</label>
+            <textarea id="body" name="body" required placeholder="Dear User, please click here..."></textarea>
+        </div>
+
+        <button type="submit">Send Spoofed Email</button>
+    </form>
+
+</body>
+</html>
