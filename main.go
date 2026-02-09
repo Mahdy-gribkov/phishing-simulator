@@ -30,6 +30,7 @@ type EmailData struct {
 	TrackingURL string
 	SenderName  string
 	SenderEmail string
+	ImageURL    string
 }
 
 type PhishedData struct {
@@ -56,6 +57,8 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to parse phished template: %v", err)
 	}
+
+	http.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("web/static"))))
 
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
@@ -146,6 +149,7 @@ func main() {
 			TrackingURL: trackingURL,
 			SenderName:  cfg.SMTPSenderName,
 			SenderEmail: cfg.SMTPSenderEmail,
+			ImageURL:    "https://0x0.st/PAsv.jpeg",
 		}
 		var buf bytes.Buffer
 		if err := emailTmpl.Execute(&buf, emailData); err != nil {
@@ -166,7 +170,11 @@ func main() {
 
 		var sendErr error
 		if cfg.SMTPMode == "direct" {
-			sendErr = client.SendDirect(to, subject, buf.String())
+			envelopeSender := to // match-recipient: use recipient address as envelope sender
+			if cfg.EnvelopeStrategy == "custom" {
+				envelopeSender = cfg.SMTPEnvelopeSender
+			}
+			sendErr = smtp.SendViaSwaks(cfg.PerlPath, cfg.SwaksPath, to, envelopeSender, cfg.SMTPSenderEmail, cfg.SMTPSenderName, subject, buf.String())
 		} else {
 			sendErr = client.Send(to, subject, buf.String())
 		}

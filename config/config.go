@@ -15,6 +15,9 @@ type Config struct {
 	SMTPSenderUser     string // For AUTH
 	SMTPSenderPass     string // For AUTH
 	InsecureSkipVerify bool
+	PerlPath           string // Path to perl binary (auto-detected if empty)
+	SwaksPath          string // Path to swaks.pl script
+	EnvelopeStrategy   string // "match-recipient" or "custom"
 }
 
 func Load() *Config {
@@ -30,6 +33,9 @@ func Load() *Config {
 		SMTPSenderUser:     getEnv("SMTP_USER", ""),
 		SMTPSenderPass:     getEnv("SMTP_PASS", ""),
 		InsecureSkipVerify: getEnv("INSECURE_SKIP_VERIFY", "true") == "true",
+		PerlPath:           getEnv("PERL_PATH", ""),
+		SwaksPath:          getEnv("SWAKS_PATH", "swaks.pl"),
+		EnvelopeStrategy:   getEnv("ENVELOPE_STRATEGY", "match-recipient"),
 	}
 }
 
