@@ -101,10 +101,10 @@
     <h1>The best Phishing App you will find</h1>
 
     {{if .Success}}
-    <div class="success">✅ {{.Success}}</div>
+    <div class="success">{{.Success}}</div>
     {{end}}
     {{if .Error}}
-    <div class="error">❌ {{.Error}}</div>
+    <div class="error">{{.Error}}</div>
     {{end}}
 
     <form method="POST" action="/send">

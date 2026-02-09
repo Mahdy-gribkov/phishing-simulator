@@ -1,6 +1,10 @@
 # Secrets
 .env
 .env.local
+*.pem
+
+# Claude
+.claude/
 
 # Binaries
 phishing-simulator

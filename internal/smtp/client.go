@@ -20,9 +20,12 @@ type Client struct {
 	SenderEmail        string // Display From header (spoofed)
 	SenderName         string
 	InsecureSkipVerify bool
+	DKIMDomain         string
+	DKIMSelector       string
+	DKIMKeyPath        string
 }
 
-func NewClient(host, port, username, password, envelopeSender, senderEmail, senderName string, insecureSkipVerify bool) *Client {
+func NewClient(host, port, username, password, envelopeSender, senderEmail, senderName string, insecureSkipVerify bool, dkimDomain, dkimSelector, dkimKeyPath string) *Client {
 	return &Client{
 		Host:               host,
 		Port:               port,
@@ -32,6 +35,9 @@ func NewClient(host, port, username, password, envelopeSender, senderEmail, send
 		SenderEmail:        senderEmail,
 		SenderName:         senderName,
 		InsecureSkipVerify: insecureSkipVerify,
+		DKIMDomain:         dkimDomain,
+		DKIMSelector:       dkimSelector,
+		DKIMKeyPath:        dkimKeyPath,
 	}
 }
 
@@ -96,7 +102,7 @@ func (c *Client) Send(to, subject, body string) error {
 		}
 	}
 
-	// AUTH — try LOGIN first (Brevo preference), fall back to PLAIN
+	// AUTH  - try LOGIN first (Brevo preference), fall back to PLAIN
 	if c.Username != "" && c.Password != "" {
 		userB64 := base64.StdEncoding.EncodeToString([]byte(c.Username))
 		passB64 := base64.StdEncoding.EncodeToString([]byte(c.Password))
@@ -133,7 +139,7 @@ func (c *Client) Send(to, subject, body string) error {
 		return fmt.Errorf("DATA failed: %w", err)
 	}
 
-	// Manually crafted RFC 5322 headers — spoofed From + Reply-To
+	// Manually crafted RFC 5322 headers  - spoofed From + Reply-To
 	msg := strings.Join([]string{
 		fmt.Sprintf("From: %s <%s>", c.SenderName, c.SenderEmail),
 		fmt.Sprintf("Reply-To: %s <%s>", c.SenderName, c.SenderEmail),
@@ -144,6 +150,13 @@ func (c *Client) Send(to, subject, body string) error {
 		"MIME-Version: 1.0",
 		"Content-Type: text/html; charset=UTF-8",
 	}, "\r\n") + "\r\n\r\n" + body
+
+	if c.DKIMDomain != "" && c.DKIMSelector != "" && c.DKIMKeyPath != "" {
+		msg, err = SignMessage(msg, c.DKIMDomain, c.DKIMSelector, c.DKIMKeyPath)
+		if err != nil {
+			return fmt.Errorf("DKIM signing: %w", err)
+		}
+	}
 
 	w := tp.Writer.W
 	if _, err := w.WriteString(msg); err != nil {
@@ -165,7 +178,7 @@ func (c *Client) Send(to, subject, body string) error {
 }
 
 // SendDirect delivers email directly to the recipient's MX server on port 25.
-// No relay, no auth, full control over From header — true spoofing.
+// No relay, no auth, full control over From header  - true spoofing.
 func (c *Client) SendDirect(to, subject, body string) error {
 	recipientDomain := senderDomain(to)
 	mxRecords, err := net.LookupMX(recipientDomain)
@@ -242,7 +255,7 @@ func (c *Client) sendToMX(mxHost, to, subject, body string) error {
 		}
 	}
 
-	// No AUTH — direct delivery
+	// No AUTH  - direct delivery
 
 	if err := sendCommand(250, "MAIL FROM:<%s>", c.SenderEmail); err != nil {
 		return fmt.Errorf("MAIL FROM failed: %w", err)
@@ -266,6 +279,13 @@ func (c *Client) sendToMX(mxHost, to, subject, body string) error {
 		"MIME-Version: 1.0",
 		"Content-Type: text/html; charset=UTF-8",
 	}, "\r\n") + "\r\n\r\n" + body
+
+	if c.DKIMDomain != "" && c.DKIMSelector != "" && c.DKIMKeyPath != "" {
+		msg, err = SignMessage(msg, c.DKIMDomain, c.DKIMSelector, c.DKIMKeyPath)
+		if err != nil {
+			return fmt.Errorf("DKIM signing: %w", err)
+		}
+	}
 
 	w := tp.Writer.W
 	if _, err := w.WriteString(msg); err != nil {

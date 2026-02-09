@@ -18,6 +18,10 @@ type Config struct {
 	PerlPath           string // Path to perl binary (auto-detected if empty)
 	SwaksPath          string // Path to swaks.pl script
 	EnvelopeStrategy   string // "match-recipient" or "custom"
+	DKIMEnabled        bool
+	DKIMPrivateKeyPath string
+	DKIMSelector       string
+	DKIMDomain         string
 }
 
 func Load() *Config {
@@ -36,6 +40,10 @@ func Load() *Config {
 		PerlPath:           getEnv("PERL_PATH", ""),
 		SwaksPath:          getEnv("SWAKS_PATH", "swaks.pl"),
 		EnvelopeStrategy:   getEnv("ENVELOPE_STRATEGY", "match-recipient"),
+		DKIMEnabled:        getEnv("DKIM_ENABLED", "false") == "true",
+		DKIMPrivateKeyPath: getEnv("DKIM_PRIVATE_KEY_PATH", ""),
+		DKIMSelector:       getEnv("DKIM_SELECTOR", "default"),
+		DKIMDomain:         getEnv("DKIM_DOMAIN", ""),
 	}
 }
 

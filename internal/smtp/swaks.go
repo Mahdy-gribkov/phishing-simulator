@@ -64,7 +64,7 @@ func resolveSwaksPath(swaksPath string) string {
 // SendViaSwaks sends an email by shelling out to swaks.pl via Perl.
 // It performs MX lookup, builds a full RFC822 message, and pipes it to swaks
 // via stdin (--data -) to avoid file path and shell escaping issues.
-func SendViaSwaks(perlPath, swaksPath, to, envelopeSender, displayFrom, displayName, subject, body string) error {
+func SendViaSwaks(perlPath, swaksPath, to, envelopeSender, displayFrom, displayName, subject, body, dkimDomain, dkimSelector, dkimKeyPath string) error {
 	perl, err := findPerl(perlPath)
 	if err != nil {
 		return err
@@ -100,6 +100,13 @@ func SendViaSwaks(perlPath, swaksPath, to, envelopeSender, displayFrom, displayN
 		time.Now().UnixNano(), domain,
 		body,
 	)
+
+	if dkimDomain != "" && dkimSelector != "" && dkimKeyPath != "" {
+		msg, err = SignMessage(msg, dkimDomain, dkimSelector, dkimKeyPath)
+		if err != nil {
+			return fmt.Errorf("DKIM signing: %w", err)
+		}
+	}
 
 	args := []string{
 		swaks,

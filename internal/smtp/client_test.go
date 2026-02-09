@@ -21,7 +21,7 @@ func TestSenderDomain(t *testing.T) {
 }
 
 func TestNewClient(t *testing.T) {
-	c := NewClient("smtp.example.com", "587", "user", "pass", "envelope@relay.com", "spoofed@fake.org", "Test Name", false)
+	c := NewClient("smtp.example.com", "587", "user", "pass", "envelope@relay.com", "spoofed@fake.org", "Test Name", false, "", "", "")
 
 	if c.Host != "smtp.example.com" {
 		t.Errorf("Host = %q, want smtp.example.com", c.Host)

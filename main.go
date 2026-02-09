@@ -73,7 +73,7 @@ func main() {
 		w.Write([]byte("ok"))
 	})
 
-	// Click tracking endpoint — logs visitor data, redirects to /phished
+	// Click tracking endpoint  - logs visitor data, redirects to /phished
 	http.HandleFunc("/click", func(w http.ResponseWriter, r *http.Request) {
 		recipient := r.URL.Query().Get("id")
 		ip := r.Header.Get("X-Forwarded-For")
@@ -88,7 +88,7 @@ func main() {
 		http.Redirect(w, r, "/phished?id="+url.QueryEscape(recipient)+"&ip="+url.QueryEscape(ip), http.StatusFound)
 	})
 
-	// Phished landing page — reveals the test
+	// Phished landing page  - reveals the test
 	http.HandleFunc("/phished", func(w http.ResponseWriter, r *http.Request) {
 		ip := r.URL.Query().Get("ip")
 		if ip == "" {
@@ -138,7 +138,7 @@ func main() {
 			return
 		}
 
-		// Build tracking URL — uses the server's own address
+		// Build tracking URL  - uses the server's own address
 		trackingURL := fmt.Sprintf("http://%s/click?id=%s", r.Host, url.QueryEscape(to))
 
 		// Render HTML email from template
@@ -157,6 +157,15 @@ func main() {
 			return
 		}
 
+		dkimDomain := cfg.DKIMDomain
+		dkimSelector := cfg.DKIMSelector
+		dkimKeyPath := cfg.DKIMPrivateKeyPath
+		if !cfg.DKIMEnabled {
+			dkimDomain = ""
+			dkimSelector = ""
+			dkimKeyPath = ""
+		}
+
 		client := smtp.NewClient(
 			cfg.SMTPHost,
 			cfg.SMTPPort,
@@ -166,6 +175,9 @@ func main() {
 			cfg.SMTPSenderEmail,
 			cfg.SMTPSenderName,
 			cfg.InsecureSkipVerify,
+			dkimDomain,
+			dkimSelector,
+			dkimKeyPath,
 		)
 
 		var sendErr error
@@ -174,7 +186,7 @@ func main() {
 			if cfg.EnvelopeStrategy == "custom" {
 				envelopeSender = cfg.SMTPEnvelopeSender
 			}
-			sendErr = smtp.SendViaSwaks(cfg.PerlPath, cfg.SwaksPath, to, envelopeSender, cfg.SMTPSenderEmail, cfg.SMTPSenderName, subject, buf.String())
+			sendErr = smtp.SendViaSwaks(cfg.PerlPath, cfg.SwaksPath, to, envelopeSender, cfg.SMTPSenderEmail, cfg.SMTPSenderName, subject, buf.String(), dkimDomain, dkimSelector, dkimKeyPath)
 		} else {
 			sendErr = client.Send(to, subject, buf.String())
 		}
