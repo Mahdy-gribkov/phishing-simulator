@@ -17,13 +17,44 @@ spec:
       containers:
       - name: app
         image: phishing-simulator:latest
-        imagePullPolicy: Never # Use local image for testing
+        imagePullPolicy: Never
         ports:
         - containerPort: 8080
         env:
         - name: PORT
           value: "8080"
         - name: SMTP_HOST
-          value: "mailhog" # Assumes mailhog service in same namespace
+          valueFrom:
+            secretKeyRef:
+              name: smtp-credentials
+              key: host
         - name: SMTP_PORT
-          value: "1025"
+          value: "587"
+        - name: SMTP_USER
+          valueFrom:
+            secretKeyRef:
+              name: smtp-credentials
+              key: username
+        - name: SMTP_PASS
+          valueFrom:
+            secretKeyRef:
+              name: smtp-credentials
+              key: password
+        - name: SMTP_SENDER_EMAIL
+          value: "angel@sporesec.com"
+        - name: SMTP_SENDER_NAME
+          value: "Donald Trump"
+        - name: INSECURE_SKIP_VERIFY
+          value: "false"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 3
+          periodSeconds: 5

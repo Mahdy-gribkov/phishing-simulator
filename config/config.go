@@ -6,21 +6,26 @@ import (
 
 type Config struct {
 	Port               string
+	SMTPMode           string // "relay" (default), "direct", or "open-relay"
 	SMTPHost           string
 	SMTPPort           string
-	SMTPSenderEmail    string
-	SMTPSenderName     string // New: Configurable Sender Name
+	SMTPEnvelopeSender string // Authenticated relay address (MAIL FROM)
+	SMTPSenderEmail    string // Display From header (can be spoofed)
+	SMTPSenderName     string // Display name in From header
 	SMTPSenderUser     string // For AUTH
 	SMTPSenderPass     string // For AUTH
 	InsecureSkipVerify bool
 }
 
 func Load() *Config {
+	senderEmail := getEnv("SMTP_SENDER_EMAIL", "president@whitehouse.gov")
 	return &Config{
 		Port:               getEnv("PORT", "8080"),
+		SMTPMode:           getEnv("SMTP_MODE", "relay"),
 		SMTPHost:           getEnv("SMTP_HOST", "localhost"),
 		SMTPPort:           getEnv("SMTP_PORT", "1025"),
-		SMTPSenderEmail:    getEnv("SMTP_SENDER_EMAIL", "president@whitehouse.gov"),
+		SMTPEnvelopeSender: getEnv("SMTP_ENVELOPE_SENDER", senderEmail),
+		SMTPSenderEmail:    senderEmail,
 		SMTPSenderName:     getEnv("SMTP_SENDER_NAME", "Donald Trump"),
 		SMTPSenderUser:     getEnv("SMTP_USER", ""),
 		SMTPSenderPass:     getEnv("SMTP_PASS", ""),

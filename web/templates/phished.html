@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>You've Been Phished!</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #0a1628;
+            color: #fff;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .container {
+            max-width: 600px;
+            margin: 40px 20px;
+            text-align: center;
+        }
+        .emoji { font-size: 80px; margin-bottom: 20px; }
+        h1 {
+            font-size: 36px;
+            color: #cc0000;
+            margin-bottom: 10px;
+        }
+        .subtitle {
+            font-size: 18px;
+            color: #c5a355;
+            margin-bottom: 30px;
+        }
+        .card {
+            background: #141e33;
+            border: 1px solid #c5a355;
+            border-radius: 8px;
+            padding: 25px;
+            margin-bottom: 20px;
+            text-align: left;
+        }
+        .card h2 {
+            color: #c5a355;
+            font-size: 16px;
+            margin-bottom: 15px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+        .data-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid #1a2a44;
+            font-size: 14px;
+        }
+        .data-row:last-child { border-bottom: none; }
+        .data-label { color: #8a8a8a; }
+        .data-value { color: #e8d48b; word-break: break-all; max-width: 60%; text-align: right; }
+        .lesson {
+            background: #1a2a44;
+            border-left: 3px solid #cc0000;
+            padding: 15px 20px;
+            margin-top: 20px;
+            text-align: left;
+            font-size: 14px;
+            line-height: 1.6;
+            color: #ccc;
+        }
+        .lesson strong { color: #fff; }
+        .footer {
+            margin-top: 30px;
+            font-size: 12px;
+            color: #555;
+        }
+        .footer a { color: #c5a355; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="emoji">&#127907;</div>
+        <h1>You've Been Phished!</h1>
+        <div class="subtitle">This was a security awareness simulation</div>
+
+        <div class="card">
+            <h2>Data Captured From Your Click</h2>
+            <div class="data-row">
+                <span class="data-label">Your IP Address</span>
+                <span class="data-value">{{.IP}}</span>
+            </div>
+            <div class="data-row">
+                <span class="data-label">Browser / OS</span>
+                <span class="data-value">{{.UserAgent}}</span>
+            </div>
+            <div class="data-row">
+                <span class="data-label">Clicked At</span>
+                <span class="data-value">{{.Timestamp}}</span>
+            </div>
+            <div class="data-row">
+                <span class="data-label">Target</span>
+                <span class="data-value">{{.Recipient}}</span>
+            </div>
+        </div>
+
+        <div class="lesson">
+            <strong>What went wrong?</strong><br>
+            You clicked a link in an email that appeared to come from a trusted source.
+            A real attacker could have stolen your credentials, installed malware, or
+            compromised your accounts.<br><br>
+            <strong>How to protect yourself:</strong><br>
+            &bull; Always check the sender's actual email address (not just the display name)<br>
+            &bull; Hover over links before clicking &mdash; check the domain<br>
+            &bull; Be suspicious of urgency and authority tactics<br>
+            &bull; When in doubt, go directly to the website instead of clicking email links
+        </div>
+
+        <div class="footer">
+            Phishing Simulator &mdash; Educational Security Tool
+        </div>
+    </div>
+</body>
+</html>
