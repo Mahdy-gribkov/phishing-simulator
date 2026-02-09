@@ -4,6 +4,8 @@ services:
     ports:
       - "8080:8080"
     env_file: .env
+    volumes:
+      - ./dkim-private.pem:/app/dkim-private.pem:ro
 
   # Local dev: docker compose --profile dev up
   mailpit:

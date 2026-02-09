@@ -1,0 +1,10 @@
+.git/
+.claude/
+.vscode/
+.idea/
+*.exe
+*.dll
+tmp/
+dkim-private.pem
+README.md
+k8s/

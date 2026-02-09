@@ -138,8 +138,12 @@ func main() {
 			return
 		}
 
-		// Build tracking URL  - uses the server's own address
-		trackingURL := fmt.Sprintf("http://%s/click?id=%s", r.Host, url.QueryEscape(to))
+		// Build tracking URL from BASE_URL or fall back to request host
+		baseURL := cfg.BaseURL
+		if baseURL == "" {
+			baseURL = "http://" + r.Host
+		}
+		trackingURL := fmt.Sprintf("%s/click?id=%s", strings.TrimRight(baseURL, "/"), url.QueryEscape(to))
 
 		// Render HTML email from template
 		htmlBody := strings.ReplaceAll(body, "\n", "<br/>")

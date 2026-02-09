@@ -2,6 +2,7 @@ package config
 
 import (
 	"os"
+	"strings"
 )
 
 type Config struct {
@@ -22,6 +23,7 @@ type Config struct {
 	DKIMPrivateKeyPath string
 	DKIMSelector       string
 	DKIMDomain         string
+	BaseURL            string // External base URL for tracking links (e.g. "http://myserver:8080")
 }
 
 func Load() *Config {
@@ -44,12 +46,13 @@ func Load() *Config {
 		DKIMPrivateKeyPath: getEnv("DKIM_PRIVATE_KEY_PATH", ""),
 		DKIMSelector:       getEnv("DKIM_SELECTOR", "default"),
 		DKIMDomain:         getEnv("DKIM_DOMAIN", ""),
+		BaseURL:            getEnv("BASE_URL", ""),
 	}
 }
 
 func getEnv(key, fallback string) string {
 	if value, ok := os.LookupEnv(key); ok {
-		return value
+		return strings.TrimSpace(value)
 	}
 	return fallback
 }

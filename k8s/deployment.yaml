@@ -23,29 +23,49 @@ spec:
         env:
         - name: PORT
           value: "8080"
-        - name: SMTP_HOST
-          valueFrom:
-            secretKeyRef:
-              name: smtp-credentials
-              key: host
-        - name: SMTP_PORT
-          value: "587"
-        - name: SMTP_USER
-          valueFrom:
-            secretKeyRef:
-              name: smtp-credentials
-              key: username
-        - name: SMTP_PASS
-          valueFrom:
-            secretKeyRef:
-              name: smtp-credentials
-              key: password
+        - name: SMTP_MODE
+          value: "direct"
         - name: SMTP_SENDER_EMAIL
-          value: "angel@sporesec.com"
+          value: "president@whitehouse.gov"
         - name: SMTP_SENDER_NAME
           value: "Donald Trump"
+        - name: ENVELOPE_STRATEGY
+          value: "match-recipient"
         - name: INSECURE_SKIP_VERIFY
           value: "false"
+        - name: DKIM_ENABLED
+          value: "true"
+        - name: DKIM_PRIVATE_KEY_PATH
+          value: "/app/dkim-private.pem"
+        - name: DKIM_SELECTOR
+          value: "default"
+        - name: DKIM_DOMAIN
+          value: "whitehouse.gov"
+        - name: BASE_URL
+          value: "http://localhost:8080"
+        # --- Uncomment for SMTP_MODE=relay ---
+        # - name: SMTP_HOST
+        #   valueFrom:
+        #     secretKeyRef:
+        #       name: smtp-credentials
+        #       key: host
+        # - name: SMTP_PORT
+        #   value: "587"
+        # - name: SMTP_USER
+        #   valueFrom:
+        #     secretKeyRef:
+        #       name: smtp-credentials
+        #       key: username
+        # - name: SMTP_PASS
+        #   valueFrom:
+        #     secretKeyRef:
+        #       name: smtp-credentials
+        #       key: password
+        volumeMounts:
+        - name: dkim-key
+          mountPath: /app/dkim-private.pem
+          subPath: dkim-private.pem
+          readOnly: true
         livenessProbe:
           httpGet:
             path: /health
@@ -58,3 +78,7 @@ spec:
             port: 8080
           initialDelaySeconds: 3
           periodSeconds: 5
+      volumes:
+      - name: dkim-key
+        secret:
+          secretName: dkim-key

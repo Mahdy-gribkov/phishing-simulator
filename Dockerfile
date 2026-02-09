@@ -1,34 +1,28 @@
 # Stage 1: Builder
 FROM golang:1.24.13-alpine AS builder
 
-# Install ca-certificates and git
 RUN apk add --no-cache ca-certificates git
 
 WORKDIR /app
 
-# Copy go mod file
-COPY go.mod ./
-# Download dependencies (if any)
+COPY go.mod go.sum ./
 RUN go mod download
 
-# Copy source code
 COPY . .
 
-# Build the binary
-# CGO_ENABLED=0 for static binary
 RUN CGO_ENABLED=0 GOOS=linux go build -o phishing-simulator .
 
-# Stage 2: Runtime
-FROM scratch
+# Stage 2: Runtime - alpine with Perl for swaks direct delivery
+FROM alpine:3.21
 
-# Copy CA certificates
-COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
+RUN apk add --no-cache ca-certificates perl perl-net-ssleay perl-io-socket-ssl
 
-# Copy the binary
-COPY --from=builder /app/phishing-simulator /phishing-simulator
+WORKDIR /app
 
-# Expose port (documentary)
+COPY --from=builder /app/phishing-simulator .
+COPY --from=builder /app/swaks.pl .
+COPY --from=builder /app/web/ ./web/
+
 EXPOSE 8080
 
-# Run
-ENTRYPOINT ["/phishing-simulator"]
+ENTRYPOINT ["./phishing-simulator"]
