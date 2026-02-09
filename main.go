@@ -1,13 +1,16 @@
 package main
 
 import (
+	"bytes"
 	"embed"
 	"fmt"
 	"html/template"
 	"log"
 	"net/http"
+	"net/url"
 	"regexp"
 	"strings"
+	"time"
 
 	"phishing-simulator/config"
 	"phishing-simulator/internal/smtp"
@@ -21,13 +24,37 @@ type PageData struct {
 	Error   string
 }
 
+type EmailData struct {
+	Subject     string
+	Body        template.HTML
+	TrackingURL string
+	SenderName  string
+	SenderEmail string
+}
+
+type PhishedData struct {
+	IP        string
+	UserAgent string
+	Timestamp string
+	Recipient string
+}
+
 func main() {
 	cfg := config.Load()
 
-	// Parse templates
 	tmpl, err := template.ParseFS(templateFS, "web/templates/form.html")
 	if err != nil {
-		log.Fatalf("Failed to parse templates: %v", err)
+		log.Fatalf("Failed to parse form template: %v", err)
+	}
+
+	emailTmpl, err := template.ParseFS(templateFS, "web/templates/email.html")
+	if err != nil {
+		log.Fatalf("Failed to parse email template: %v", err)
+	}
+
+	phishedTmpl, err := template.ParseFS(templateFS, "web/templates/phished.html")
+	if err != nil {
+		log.Fatalf("Failed to parse phished template: %v", err)
 	}
 
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
@@ -36,6 +63,44 @@ func main() {
 			return
 		}
 		tmpl.Execute(w, nil)
+	})
+
+	http.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("ok"))
+	})
+
+	// Click tracking endpoint — logs visitor data, redirects to /phished
+	http.HandleFunc("/click", func(w http.ResponseWriter, r *http.Request) {
+		recipient := r.URL.Query().Get("id")
+		ip := r.Header.Get("X-Forwarded-For")
+		if ip == "" {
+			ip = r.RemoteAddr
+		}
+		ua := r.Header.Get("User-Agent")
+
+		log.Printf("[CLICK] recipient=%s ip=%s ua=%s time=%s",
+			recipient, ip, ua, time.Now().Format(time.RFC3339))
+
+		http.Redirect(w, r, "/phished?id="+url.QueryEscape(recipient)+"&ip="+url.QueryEscape(ip), http.StatusFound)
+	})
+
+	// Phished landing page — reveals the test
+	http.HandleFunc("/phished", func(w http.ResponseWriter, r *http.Request) {
+		ip := r.URL.Query().Get("ip")
+		if ip == "" {
+			ip = r.Header.Get("X-Forwarded-For")
+			if ip == "" {
+				ip = r.RemoteAddr
+			}
+		}
+		data := PhishedData{
+			IP:        ip,
+			UserAgent: r.Header.Get("User-Agent"),
+			Timestamp: time.Now().Format("Jan 02, 2006 at 15:04:05 MST"),
+			Recipient: r.URL.Query().Get("id"),
+		}
+		phishedTmpl.Execute(w, data)
 	})
 
 	http.HandleFunc("/send", func(w http.ResponseWriter, r *http.Request) {
@@ -48,14 +113,11 @@ func main() {
 		subject := r.FormValue("subject")
 		body := r.FormValue("body")
 
-		// Basic Validation: All fields required, body must not be empty
 		if to == "" || subject == "" || len(strings.TrimSpace(body)) == 0 {
 			tmpl.Execute(w, PageData{Error: "All fields are required (body must not be empty)."})
 			return
 		}
 
-		// Validation 1: Strict Email Regex (must have dot)
-		// Regex: ^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$
 		emailRegex := `^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$`
 		matched, _ := regexp.MatchString(emailRegex, to)
 		if !matched {
@@ -63,16 +125,31 @@ func main() {
 			return
 		}
 
-		// Validation 2: Character Count Limit (Max 1000 chars)
 		if len(body) > 1000 {
 			tmpl.Execute(w, PageData{Error: fmt.Sprintf("Body too long! Limit is 1000 characters (current: %d).", len(body))})
 			return
 		}
 
-		// Security: Prevent Header Injection via Form
-		// We are manually crafting headers, so we simply ensure no newlines in subject/to
 		if strings.ContainsAny(to, "\r\n") || strings.ContainsAny(subject, "\r\n") {
 			tmpl.Execute(w, PageData{Error: "Invalid input detected."})
+			return
+		}
+
+		// Build tracking URL — uses the server's own address
+		trackingURL := fmt.Sprintf("http://%s/click?id=%s", r.Host, url.QueryEscape(to))
+
+		// Render HTML email from template
+		htmlBody := strings.ReplaceAll(body, "\n", "<br/>")
+		emailData := EmailData{
+			Subject:     subject,
+			Body:        template.HTML(htmlBody),
+			TrackingURL: trackingURL,
+			SenderName:  cfg.SMTPSenderName,
+			SenderEmail: cfg.SMTPSenderEmail,
+		}
+		var buf bytes.Buffer
+		if err := emailTmpl.Execute(&buf, emailData); err != nil {
+			tmpl.Execute(w, PageData{Error: fmt.Sprintf("Failed to render email: %v", err)})
 			return
 		}
 
@@ -81,25 +158,31 @@ func main() {
 			cfg.SMTPPort,
 			cfg.SMTPSenderUser,
 			cfg.SMTPSenderPass,
+			cfg.SMTPEnvelopeSender,
 			cfg.SMTPSenderEmail,
 			cfg.SMTPSenderName,
 			cfg.InsecureSkipVerify,
 		)
 
-		err := client.Send(to, subject, body)
-		if err != nil {
-			log.Printf("Error sending email: %v", err)
-			tmpl.Execute(w, PageData{Error: fmt.Sprintf("Failed to send email: %v", err)})
+		var sendErr error
+		if cfg.SMTPMode == "direct" {
+			sendErr = client.SendDirect(to, subject, buf.String())
+		} else {
+			sendErr = client.Send(to, subject, buf.String())
+		}
+		if sendErr != nil {
+			log.Printf("Error sending email: %v", sendErr)
+			tmpl.Execute(w, PageData{Error: fmt.Sprintf("Failed to send email: %v", sendErr)})
 			return
 		}
 
-		log.Printf("Email sent to %s via %s:%s", to, cfg.SMTPHost, cfg.SMTPPort)
+		log.Printf("Email sent to %s (mode=%s)", to, cfg.SMTPMode)
 		tmpl.Execute(w, PageData{Success: "Email successfully spoofed and sent!"})
 	})
 
 	log.Printf("Server listening on port %s", cfg.Port)
-	log.Printf("Configuration: SMTP Host=%s, Port=%s, Sender=%s <%s>",
-		cfg.SMTPHost, cfg.SMTPPort, cfg.SMTPSenderName, cfg.SMTPSenderEmail)
+	log.Printf("Configuration: Mode=%s, From=%s <%s>",
+		cfg.SMTPMode, cfg.SMTPSenderName, cfg.SMTPSenderEmail)
 
 	if err := http.ListenAndServe(":"+cfg.Port, nil); err != nil {
 		log.Fatalf("Error starting server: %v", err)
